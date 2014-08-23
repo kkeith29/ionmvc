@@ -1,0 +1,35 @@
+#!/usr/bin/env php
+<?php
+
+try {
+	if ( !isset( $_SERVER['argv'][1] ) ) {
+		throw new Exception('Version number is required');
+	}
+	$version = trim( $_SERVER['argv'][1] );
+	if ( preg_match( '#^[0-9]\.[0-9]\.[0-9]$#',$version ) !== 1 ) {
+		throw new Exception('Version number is not valid');
+	}
+	$package_file = dirname(__FILE__) . '/ionmvc/package.json';
+	if ( file_exists( $package_file ) ) {
+		$data = json_decode( file_get_contents( $package_file ) );
+		if ( version_compare( $data->version,$version,'>' ) ) {
+			throw new Exception('Version is less than previous one');
+		}
+	}
+	else {
+		$data = new stdClass;
+	}
+	echo "Updating version to {$version}" . PHP_EOL;
+	$data->version = $version;
+	file_put_contents( $package_file,json_encode( $data ) );
+	
+	passthru( "git archive -o ionmvc-{$version}.zip --prefix=ionmvc-{$version}/ HEAD",$return );
+	if ( (int) $return !== 0 ) {
+		throw new Exception('Unable to create archive');
+	}
+}
+catch( Exception $e ) {
+	echo $e->getMessage() . PHP_EOL;
+}
+
+?>
