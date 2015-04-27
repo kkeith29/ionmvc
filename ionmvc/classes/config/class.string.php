@@ -6,8 +6,8 @@ use ionmvc\classes\array_func;
 
 class string {
 
-	private $replacements = array();
-	private $data = array();
+	private $replacements = [];
+	private $data         = [];
 
 	public function __construct( $data ) {
 		$this->parse_str( $data );
@@ -41,15 +41,15 @@ class string {
 		}
 		$replacements = false;
 		if ( strpos( $data,'{' ) !== false ) {
-			$data = preg_replace_callback( '#\{([^\}]+)\}#',array( $this,'replace_value' ),$data );
+			$data = preg_replace_callback( '#\{([^\}]+)\}#',[ $this,'replace_value' ],$data );
 			$replacments = true;
 		}
 		$data = explode( '|',$data );
-		$config = array();
+		$config = [];
 		foreach( $data as $datum ) {
 			$values = true;
 			if ( strpos( $datum,'[' ) !== false ) {
-				$values = array_map( array( $this,'prepare_value' ),explode( '[',$datum ) );
+				$values = array_map( [ $this,'prepare_value' ],explode( '[',$datum ) );
 				$datum = array_shift( $values );
 				foreach( $values as &$value ) {
 					if ( $value == 'yes' ) {
@@ -65,10 +65,10 @@ class string {
 			}
 			if ( strpos( $datum,':' ) !== false ) {
 				$parts = explode( ':',$datum );
-				$data = array();
+				$data = [];
 				$_data =& $data;
 				foreach( $parts as $part ) {
-					$_data[$part] = array();
+					$_data[$part] = [];
 					$_data =& $_data[$part];
 				}
 				$_data = $values;

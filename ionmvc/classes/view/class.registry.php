@@ -2,22 +2,22 @@
 
 namespace ionmvc\classes\view;
 
-use ionmvc\classes\app;
 use ionmvc\classes\output;
+use ionmvc\classes\response;
 use ionmvc\classes\view;
 use ionmvc\exceptions\app as app_exception;
 
 class registry {
 
-	private $views = array();
-	private $compiled_views = array();
+	private $views          = [];
+	private $compiled_views = [];
 
 	public function __construct() {
-		app::register('view',function() {
-			app::init('view/registry')->compile();
+		response::hook()->attach('view',function() {
+			response::view_registry()->compile();
 		});
-		app::register('view_output',function() {
-			app::init('view/registry')->output();
+		response::hook()->attach('view_output',function() {
+			response::view_registry()->output();
 		});
 	}
 
@@ -26,10 +26,10 @@ class registry {
 			if ( $view->has_parent() || $view->rendered() ) {
 				continue;
 			}
-			$this->compiled_views[] = array(
+			$this->compiled_views[] = [
 				'instance' => $view,
-				'data' => $view->render()
-			);
+				'data'     => $view->render()
+			];
 		}
 	}
 

@@ -3,6 +3,7 @@
 namespace ionmvc\classes\input;
 
 use ionmvc\classes\config;
+use ionmvc\classes\input;
 
 class useragent {
 
@@ -23,14 +24,15 @@ class useragent {
 		));
 		$this->mobiles = config::get('agents.mobile');
 		$this->robots  = config::get('agents.robots');
-		if ( !isset( $_SERVER['HTTP_USER_AGENT'] ) ) {
+		$agent = input::server('HTTP_USER_AGENT',false);
+		if ( $agent === false ) {
 			return;
 		}
-		$this->agent = $_SERVER['HTTP_USER_AGENT'];
+		$this->agent = $agent;
 		if ( is_array( $this->agent ) ) {
 			$this->agent = array_shift( $this->agent );
 		}
-		foreach( array('mobiles'=>'mobile','robots'=>'robot') as $type => $data ) {
+		foreach( ['mobiles'=>'mobile','robots'=>'robot'] as $type => $data ) {
 			if ( count( $this->{$type} ) > 0 ) {
 				foreach( $this->{$type} as $datum => $name ) {
 					if ( stripos( $this->agent,$datum ) !== false ) {

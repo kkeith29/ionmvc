@@ -12,11 +12,11 @@ abstract class error {
 		set_error_handler( __CLASS__ . '::error_handler' );
 		set_exception_handler( __CLASS__ . '::exception_handler' );
 		error_reporting( E_ALL | E_STRICT );
-		$config = array(
-			'display_errors' => ( config::get('production') === true ? 'Off' : 'On' ),
-			'log_errors' => 'On',
-			'error_log' => path::get('storage-log') . config::get('log.php')
-		);
+		$config = [
+			'display_errors' => ( app::env( \ionmvc\ENV_PRODUCTION ) ? 'Off' : 'On' ),
+			'log_errors'     => 'On',
+			'error_log'      => path::get('storage-log') . config::get('log.php')
+		];
 		foreach( $config as $name => $value ) {
 			ini_set( $name,$value );
 		}
@@ -62,19 +62,23 @@ abstract class error {
 
 	public static function exception_handler( $exception ) {
 		self::log( $exception->getMessage() . ' in file ' . $exception->getFile() . ' on line: ' . $exception->getLine() );
-		if ( config::get('production') === true ) {
+		if ( !app::mode( request::mode_uri ) && app::env( \ionmvc\ENV_PRODUCTION ) ) {
 			event::trigger('app.error.technical_difficulties');
-			exit;
+			app::stop();
+		}
+		if ( app::mode( request::mode_cli ) ) {
+			cli::error( $exception );
+			return;
 		}
 		try {
-			echo view::fetch('ionmvc-view:error/exception',array(
+			echo view::fetch('ionmvc-view:error/exception',[
 				'full'      => ( method_exists( $exception,'getSeverity' ) && $exception->getSeverity() === 1 ? true : false ),
 				'display_styles' => self::$display_styles,
 				'message'   => $exception->getMessage(),
 				'file'      => $exception->getFile(),
 				'line'      => $exception->getLine(),
 				'backtrace' => $exception->getTraceAsString()
-			))->render();
+			])->render();
 		}
 		catch( app_exception $e ) {
 			echo $e->getMessage();
@@ -90,7 +94,7 @@ abstract class error {
 		$trace = debug_backtrace();
 		if ( !is_null( $index ) ) {
 			isset( $trace[$index] ) or die("Backtrace index '{$index}' not found");
-			$trace = array('0'=>$trace[$index]);
+			$trace = [ '0'=>$trace[$index] ];
 		}
 		$retval = '';
 		foreach( $trace as $data ) {
@@ -109,7 +113,7 @@ abstract class error {
 			if ( isset( $data['function'] ) ) {
 				$retval .= "{$data['function']}(";
 				if ( isset( $data['args'] ) ) {
-					$args = array();
+					$args = [];
 					foreach( $data['args'] as $arg ) {
 						$args[] = "'" . ( is_string( $arg ) ? $arg : gettype( $arg ) ) . "'";
 					}
@@ -120,11 +124,6 @@ abstract class error {
 			$retval .= "\n";
 		}
 		return $retval;
-	}
-
-	public static function show( $status ) {
-		http::status_code( $status );
-		event::trigger("app.error.{$status}");
 	}
 
 }

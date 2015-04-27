@@ -9,46 +9,57 @@ use ionmvc\exceptions\app as app_exception;
 
 class package {
 
-	private static $instances = array();
-	private static $_types = array(
-		\ionmvc\CLASS_TYPE_CONTROLLER => array(
+	private static $instances = [];
+	private static $_types = [
+		\ionmvc\CLASS_TYPE_CONTROLLER => [
 			'name' => 'controller',
 			'path' => 'controllers'
-		),
-		\ionmvc\CLASS_TYPE_DEFAULT => array(
+		],
+		\ionmvc\CLASS_TYPE_DEFAULT => [
 			'name' => 'class',
 			'path' => 'classes'
-		),
-		\ionmvc\CLASS_TYPE_EXCEPTION => array(
+		],
+		\ionmvc\CLASS_TYPE_COMMAND => [
+			'name' => 'command',
+			'path' => 'commands'
+		],
+		\ionmvc\CLASS_TYPE_EXCEPTION => [
 			'name' => 'exception',
 			'path' => 'exceptions'
-		),
-		\ionmvc\CLASS_TYPE_HELPER => array(
+		],
+		\ionmvc\CLASS_TYPE_HELPER => [
 			'name' => 'helper',
 			'path' => 'helpers'
-		),
-		\ionmvc\CLASS_TYPE_LIBRARY => array(
+		],
+		\ionmvc\CLASS_TYPE_LIBRARY => [
 			'name' => 'library',
 			'path' => 'libraries'
-		),
-		\ionmvc\CLASS_TYPE_MODEL => array(
+		],
+		\ionmvc\CLASS_TYPE_MODEL => [
 			'name' => 'model',
 			'path' => 'models'
-		)
-	);
+		]
+	];
 
-	protected $types = array();
+	protected $types = [];
 
-	public $info = array();
-	public $type_info = array();
+	public $info = [];
+	public $type_info = [];
 
 	final public static function init() {
+		$packages_file = path::get('packages.json','storage-app');
+		if ( $packages_file === false ) {
+			return false;
+		}
+		//load packages
+		
+		return;
 		$finder = new finder;
 		$package_path = path::get('app-package');
 		$finder->path( $package_path );
 		$finder->config('dir_only',true);
 		$dirs = $finder->go();
-		$packages = array();
+		$packages = [];
 		//parse directory structure
 		foreach( $dirs as $dir ) {
 			$package = $dir;
@@ -61,9 +72,9 @@ class package {
 				continue;
 			}
 			if ( !isset( $packages[$package] ) ) {
-				$packages[$package] = array(
-					'directories' => array()
-				);
+				$packages[$package] = [
+					'directories' => []
+				];
 			}
 			if ( $subdir === false ) {
 				continue;
@@ -96,7 +107,7 @@ class package {
 			unset( $info );
 		}
 		//check requirements and prioritize packages
-		$priorities = array();
+		$priorities = [];
 		foreach( $packages as $package => $info ) {
 			if ( isset( $info['data']['require'] ) ) {
 				foreach( $info['data']['require'] as $_package => $version ) {
@@ -113,29 +124,29 @@ class package {
 				}
 			}
 			if ( !isset( $priorities[$info['data']['priority']] ) ) {
-				$priorities[$info['data']['priority']] = array();
+				$priorities[$info['data']['priority']] = [];
 			}
 			$priorities[$info['data']['priority']][] = $info;
 		}
 		unset( $packages );
 		krsort( $priorities,SORT_NUMERIC );
 		foreach( $priorities as $priority => $packages ) {
-			foreach( $packages as $package => $info ) {
+			foreach( $packages as $info ) {
 				//load in config files
 				if ( in_array( 'config',$info['directories'] ) ) {
 					$config_path = $info['path'] . 'config/';
-					foreach( array('constants.php'=>false,'config.php'=>true) as $config_file => $extend ) {
+					foreach( ['constants.php'=>false,'config.php'=>true] as $config_file => $extend ) {
 						$_path = $config_path . $config_file;
 						if ( !file_exists( $_path ) ) {
 							continue;
 						}
-						config::load( $_path,array(
+						config::load( $_path,[
 							'full_path' => true,
 							'extend'    => $extend
-						) );
+						] );
 					}
 				}
-				path::add( $info['path_alias'],"{app-package}/{$package}" );
+				path::add( $info['path_alias'],"{app-package}/{$info['package_dir']}" );
 				$class = '\\' . str_replace( '.','\\',$info['namespace'] );
 				self::$instances[$info['name']] = new $class( $info );
 				if ( method_exists( self::$instances[$info['name']],'setup' ) ) {
@@ -167,27 +178,27 @@ class package {
 		$this->info = $info;
 	}
 
-	public function add_type( $name,$config=array() ) {
+	public function add_type( $name,$config=[] ) {
 		if ( !autoloader::has_class_type( $config['type'] ) ) {
 			if ( !isset( $config['type_config'] ) ) {
-				$config['type_config'] = array();
+				$config['type_config'] = [];
 			}
 			autoloader::add_class_type( $config['type'],$config['type_config'] );
 		}
-		$this->types[$config['type']] = array(
+		$this->types[$config['type']] = [
 			'name' => $name,
 			'path' => $config['path']
-		);
+		];
 		$_namespace = $this->info['namespace'] . '.' . str_replace( '-','_',$config['path'] );
 		$_path_name = "{$this->info['path_alias']}-{$name}";
 		path::add( $_path_name,"{app-package}/{$this->info['package_dir']}/{$config['path']}" );
 		if ( !isset( $config['register'] ) || $config['register'] ) {
 			autoloader::add_namespace( $_namespace,$config['type'],$_path_name );
 		}
-		$this->type_info[$name] = array(
+		$this->type_info[$name] = [
 			'namespace'  => $_namespace,
 			'path_alias' => $_path_name
-		);
+		];
 	}
 
 	public function _init() {

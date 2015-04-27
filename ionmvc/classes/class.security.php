@@ -9,21 +9,21 @@ use ionmvc\exceptions\app as app_exception;
 abstract class security {
 
 	private static $salt_length = 15;
-	private static $config = array(
-		'pbkdf2' => array(
+	private static $config = [
+		'pbkdf2' => [
 			'hash_algorithm' => 'sha256',
-			'iterations' => 1000,
-			'salt_bytes' => 24,
-			'hash_bytes' => 24
-		),
-		'hash' => array(
+			'iterations'     => 1000,
+			'salt_bytes'     => 24,
+			'hash_bytes'     => 24
+		],
+		'hash' => [
 			'sections'        => 4,
-			'algorithm_index'  => 0,
+			'algorithm_index' => 0,
 			'iteration_index' => 1,
 			'salt_index'      => 2,
 			'pbkdf2_index'    => 3
-		)
-	);
+		]
+	];
 
 
 	private static function pbkdf2( $algorithm,$password,$salt,$count,$key_length,$raw_output=false ) {

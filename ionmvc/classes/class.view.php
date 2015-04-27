@@ -10,11 +10,9 @@ class view {
 	const prepend   = 2;
 	const append    = 3;
 
-	private $registry;
-
 	private $name = null;
 	private $path = null;
-	private $vars = array();
+	private $vars = [];
 	private $parent = null;
 	private $rendered = false;
 
@@ -30,13 +28,21 @@ class view {
 	}
 
 	public static function __callStatic( $name,$params ) {
-		return app::init('view/registry')->find( $name );
+		return response::view_registry()->find( $name );
 	}
 
-	public function __construct( $path,$data=null ) { 
-		$this->registry = app::init('view/registry');
+	public function __construct( $path,$data=null,$config=[] ) {
+		if ( !isset( $config['register'] ) && !response::exists() ) {
+			$config['register'] = false;
+		}
 		$this->name = str_replace( '/','_',$path );
-		$this->registry->add( $this->name,$this );
+		if ( !isset( $config['register'] ) || $config['register'] ) {
+			if ( ( $registry = response::registry()->find( \ionmvc\CLASS_TYPE_DEFAULT,'view_registry' ) ) === false ) {
+				$registry = new view\registry;
+				response::registry()->add( \ionmvc\CLASS_TYPE_DEFAULT,'view_registry',$registry );
+			}
+			$registry->add( $this->name,$this );
+		}
 		$this->path = $path;
 		if ( !is_null( $data ) ) {
 			$this->data( $data );

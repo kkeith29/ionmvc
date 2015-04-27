@@ -1,4 +1,4 @@
-ionmvc
+IonMVC
 ======
 
-PHP 5.3+ MVC Framework
+PHP 5.4+ MVC Framework

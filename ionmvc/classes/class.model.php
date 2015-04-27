@@ -3,26 +3,32 @@
 namespace ionmvc\classes;
 
 use ionmvc\exceptions\app as app_exception;
+use ionmvc\traits\magic_vars;
 
 class model {
 
-	protected $data = array();
+	use magic_vars;
 
 	public $db;
 	public $table;
 
+	final public static function new_instance( $name ) {
+		$instance = autoloader::class_by_type( $name,\ionmvc\CLASS_TYPE_MODEL,array(
+			'instance' => true
+		) );
+		if ( $instance === false ) {
+			throw new app_exception( 'Unable to load model: %s',$name );
+		}
+		return $instance;
+	}
+
 	final public static function instance( $name,$varname=null ) {
 		if ( is_null( $varname ) ) {
-			$varname = str_replace( array('/','__'),'_',$name );
+			$varname = str_replace( ['/'],'_',$name );
 		}
-		if ( ( $instance = app::$registry->find( registry::model,$varname ) ) === false ) {
-			$instance = autoloader::class_by_type( $name,\ionmvc\CLASS_TYPE_MODEL,array(
-				'instance' => true
-			) );
-			if ( $instance === false ) {
-				throw new app_exception( 'Unable to load model: %s',$name );
-			}
-			app::$registry->add( registry::model,$varname,$instance );
+		if ( ( $instance = app::$registry->find( \ionmvc\CLASS_TYPE_MODEL,$varname ) ) === false ) {
+			$instance = self::new_instance( $name );
+			app::$registry->add( \ionmvc\CLASS_TYPE_MODEL,$varname,$instance );
 		}
 		return $instance;
 	}
@@ -44,22 +50,6 @@ class model {
 		if ( !is_null( $table ) ) {
 			$this->table = $this->db->table( $table );
 		}
-	}
-
-	public function __isset( $key ) {
-		return isset( $this->data[$key] );
-	}
-
-	public function __get( $key ) {
-		return ( array_key_exists( $key,$this->data ) ? $this->data[$key] : null );
-	}
-
-	public function __set( $key,$value ) {
-		$this->data[$key] = $value;
-	}
-
-	public function __unset( $key ) {
-		unset( $this->data[$key] );
 	}
 
 }

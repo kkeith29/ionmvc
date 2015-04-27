@@ -7,31 +7,18 @@ use ionmvc\exceptions\path as path_exception;
 
 class config {
 
-	private static $instance = null;
-
-	protected $data = array();
-
-	public static function instance() {
-		if ( is_null( self::$instance ) ) {
-			self::$instance = new self;
-		}
-		return self::$instance;
-	}
-
-	public static function init( $data ) {
-		$config = self::instance()->data( $data );
-	}
+	protected $data = [];
 
 	public static function __callStatic( $method,$args ) {
-		$class = self::instance();
+		$class = app::$registry->find( \ionmvc\CLASS_TYPE_DEFAULT,'config' );
 		$method = "_{$method}";
 		if ( !method_exists( $class,$method ) ) {
 			throw new app_exception( "Method '%s' not found",$method );
 		}
-		return call_user_func_array( array( $class,$method ),$args );
+		return call_user_func_array( [ $class,$method ],$args );
 	}
 
-	public static function load( $file,$_config=array() ) {
+	public static function load( $file,$_config=[] ) {
 		try {
 			if ( !isset( $_config['full_path'] ) || !$_config['full_path'] ) {
 				$path = path::config( $file );
@@ -44,7 +31,7 @@ class config {
 				if ( !isset( $config ) ) {
 					throw new app_exception( 'No config variable set in file: %s',$file );
 				}
-				self::instance()->_extend( $config );
+				self::extend( $config );
 			}
 		}
 		catch( path_exception $e ) {
@@ -52,7 +39,19 @@ class config {
 		}
 	}
 
-	public function data( $data ) {
+	public function __construct( $data=[] ) {
+		$this->data = $data;
+	}
+
+	public function __call( $method,$args ) {
+		$method = "_{$method}";
+		if ( !method_exists( $this,$method ) ) {
+			throw new app_exception( "Method '%s' not found",$method );
+		}
+		return call_user_func_array( [ $this,$method ],$args );
+	}
+
+	public function _data( $data ) {
 		$this->data = $data;
 	}
 
@@ -87,7 +86,7 @@ class config {
 		while( count( $keys ) > 1 ) {
 			$key = array_shift( $keys );
 			if ( !isset( $array[$key] ) || !is_array( $array[$key] ) ) {
-				$array[$key] = array();
+				$array[$key] = [];
 			}
 			$array =& $array[$key];
 		}

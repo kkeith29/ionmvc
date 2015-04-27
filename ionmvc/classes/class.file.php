@@ -4,27 +4,12 @@ namespace ionmvc\classes;
 
 abstract class file {
 
-	const downloadable = 1;
-	const not_downloadable = 2;
-	const force_download = 3;
-
-	public static function uri_file( $file,$config=array() ) {
-		$config['csm'] = true;
-		$config['extn'] = self::get_extension( $file );
-		return uri::create( 'app/file/local/' . uri::base64_encode( $file ),$config );
-	}
-
-	public static function uri_db( $id,$config=array() ) {
-		$config['csm'] = true;
-		return uri::create("app/file/fetch/{$id}",$config );
-	}
-
     public static function get_extension( $file ) {
         return strtolower( pathinfo( $file,PATHINFO_EXTENSION ) );
     }
 
 	public static function format_filesize( $bytes,$p=2 ) {
-		$units = array('B','KB','MB','GB','TB');
+		$units = ['B','KB','MB','GB','TB'];
 		$bytes = max( $bytes,0 );
 		$pow = min( floor( ( $bytes ? log( $bytes ) : 0 ) / log( 1024 ) ),( count( $units ) - 1 ) );
 		$bytes /= pow( 1024,$pow );
@@ -32,7 +17,7 @@ abstract class file {
 	}
 
 	public static function to_bytes( $str ) {
-		$sizes = array('KB','MB','GB','TB');
+		$sizes = ['KB','MB','GB','TB'];
 		$multi = 1024;
 		foreach( $sizes as $size ) {
 			if ( strpos( $str,$size ) === false ) {
@@ -44,13 +29,32 @@ abstract class file {
 		return false;
 	}
 
+	public static function sanitize_name( $name ) {
+		$extn = self::get_extension( $name );
+		return trim( preg_replace( '#[_]{2,}#','_',preg_replace( '#[^a-zA-Z0-9_]+#','_',substr( $name,0,( strlen( $name ) - ( strlen( $extn ) + 1 ) ) ) ) ),'_' ) . ".{$extn}";
+	}
+
+	public static function shorten_name( $filename,$chars ) {
+		$length = strlen( $filename );
+		if ( $length <= $chars ) {
+			return $filename;
+		}
+		$extn = false;
+		if ( ( $pos = strrpos( $filename,'.' ) ) !== false ) {
+			$name = substr( $filename,0,$pos );
+			$extn = substr( $filename,( $pos + 1 ) );
+		}
+		$remove = ( $length - $chars ) + 3;
+		return substr( $name,0,( strlen( $name ) - $remove ) ) . '...' . ( $extn !== false ? ".{$extn}" : '' );
+	}
+
 	public static function download( $file,$name=null,$mime=null,$data=null ) {
 		output::compression(false);
 		if ( is_null( $mime ) && ( $mime = http::mime_type( file::get_extension( $file ) ) ) === false ) {
 			throw new app_exception('Mime type for file not found');
 		}
 		http::content_type( $mime );
-		http::header('Content-Disposition: attachment; filename="' . ( is_null( $name ) ? basename( $file ) : $name ) . '"');
+		http::header('Content-Disposition: attachment; filename="' . self::sanitize_name(( is_null( $name ) ? basename( $file ) : $name )) . '"');
 		http::header('Expires: 0');
 		http::header('Content-Transfer-Encoding: binary');
 		if ( isset( $_SERVER['HTTP_USER_AGENT'] ) && strpos( $_SERVER['HTTP_USER_AGENT'],'MSIE' ) !== false ) {
@@ -67,8 +71,7 @@ abstract class file {
 			$data = $file;
 		}
 		output::set_data( $data,$type );
-		app::terminate();
-		exit;
+		app::stop();
 	}
 
 	public static function output( $file,$mime=null,$data=null ) {
@@ -83,23 +86,26 @@ abstract class file {
 			$data = $file;
 		}
 		output::set_data( $data,$type );
-		app::terminate();
-		exit;
+		app::stop();
+	}
+
+	public static function get_data( $path,$config=[] ) {
+		if ( !file_exists( $path ) ) {
+			return false;
+		}
+		if ( isset( $config['raw'] ) && $config['raw'] ) {
+			return file_get_contents( $path );
+		}
+		if ( isset( $config['vars'] ) ) {
+			extract( $config['vars'] );
+		}
+		ob_start();
+		include $path;
+		$data = ob_get_contents();
+		ob_end_clean();
+		return $data;
 	}
 
 }
-
-/* TABLE STRUCTURE
-CREATE TABLE IF NOT EXISTS `files` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `base` varchar(255) NOT NULL,
-  `file` varchar(50) NOT NULL,
-  `path` text NOT NULL,
-  `type` varchar(50) NOT NULL,
-  `size` int(11) NOT NULL,
-  `download` tinyint(1) NOT NULL DEFAULT \'0\',
-  PRIMARY KEY (`id`)
-) ENGINE=MyISAM DEFAULT CHARSET=utf8;
-*/
 
 ?>

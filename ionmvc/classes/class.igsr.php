@@ -15,16 +15,16 @@ class igsr {
 	const append    = 2;
 	const overwrite = 3;
 
-	private $data = array();
-	private $delim = '/';
+	private $data = [];
+	private $delim = '.';
 	private $type = null;
 	private $value = null;
 	private $changed = false;
-	private $callbacks = array();
+	private $callbacks = [];
 
 	private $path_function = null;
 
-	public function __construct( &$data=array() ) {
+	public function __construct( &$data=[] ) {
 		$this->set_data( $data );
 	}
 
@@ -83,7 +83,7 @@ class igsr {
 
 	public function callback( $type,$function ) {
 		if ( isset( $this->callbacks[$type] ) ) {
-			$this->callbacks[$type] = array();
+			$this->callbacks[$type] = [];
 		}
 		$this->callbacks[$type][] = $function;
 		return $this;
@@ -94,7 +94,7 @@ class igsr {
 	}
 
 	private function traverse( $path,$act ) {
-		$paths = array_values( array_filter( explode( $this->delim,$path ),array( $this,'filter' ) ) );
+		$paths = array_values( array_filter( explode( $this->delim,$path ),[ $this,'filter' ] ) );
 		if ( !is_null( $this->path_function ) ) {
 			$paths = call_user_func( $this->path_function,$paths );
 		}
@@ -113,7 +113,7 @@ class igsr {
 						if ( func::str_at_end( '[]',$path,true ) ) {
 							//$adata[$path][] = $this->value;
 							if ( !isset( $adata[$path] ) || !is_array( $adata[$path] ) ) {
-								$adata[$path] = array();
+								$adata[$path] = [];
 							}
 							$this->type = self::append;
 						}
@@ -141,13 +141,13 @@ class igsr {
 						return true;
 					}
 					elseif ( $is_end == false && ( isset( $adata[$path] ) && !is_array( $adata[$path] ) ) ) {
-						$adata[$path] = array();
+						$adata[$path] = [];
 					}
 				break;
 				case self::get:
 					if ( $is_end == true ) {
 						if ( is_array( $adata ) && strpos( $path,',' ) !== false ) {
-							$retval = array();
+							$retval = [];
 							foreach( explode( ',',$path ) as $k ) {
 								$retval[] = ( isset( $adata[$k] ) ? $adata[$k] : null );
 							}
@@ -198,7 +198,7 @@ class igsr {
 	public function get() {
 		$args = func_get_args();
 		$args = array_func::flatten( $args );
-		$retval = array();
+		$retval = [];
 		foreach( $args as $arg ) {
 			$value = $this->traverse( $arg,self::get );
 			if ( isset( $this->callbacks[self::get] ) ) {

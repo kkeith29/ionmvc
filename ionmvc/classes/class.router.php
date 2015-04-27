@@ -3,159 +3,177 @@
 namespace ionmvc\classes;
 
 use ionmvc\exceptions\app as app_exception;
-use ionmvc\exceptions\autoloader as autoloader_exception;
-use ionmvc\exceptions\load_exception;
 
 class router {
 
-	const method_get = 'GET';
-	const method_post = 'POST';
+	const type_rewrite    = 1;
+	const type_controller = 2;
+	const type_closure    = 3;
 
-	const type_controller = 1;
-	const type_uri = 2;
+	private static $instance = null;
 
-	const stop = 'ionmvc.router.stop';
+	protected $request = null;
+	protected $routes = [];
 
-	private static $config = array();
-	private static $routes = array();
-	private static $data = false;
-
-	public static function init() {
-		self::$config['default_controller'] = config::get('framework.controller.default');
-		self::$config['default_action']     = config::get('framework.action.default');
-		config::load('routes.php');
-		//check for matching routes otherwise use default
-		$data = array();
-		if ( count( self::$routes ) > 0 ) {
-			$uri = uri::get_path(true);
-			$uri = ( count( $uri['segments'] ) > 0 ? implode( '/',$uri['segments'] ) : '/' );
-			foreach( self::$routes as $route ) {
-				$route['path'] = str_replace( array(':num',':any',':all'),array('[0-9]+','[^/]+','.+'),$route['path'] );
-				if ( preg_match( "#^{$route['path']}$#",$uri,$match ) ) {
-					if ( !isset( $route['config']['type'] ) ) {
-						throw new app_exception('Route type is required');
-					}
-					if ( is_callable( $route['to'] ) ) {
-						$route['to'] = call_user_func( $route['to'],$uri,$match );
-					}
-					if ( $route['to'] === true ) {
-						continue;
-					}
-					if ( $route['to'] === false ) {
-						break;
-					}
-					if ( $route['to'] === self::stop ) {
-						return;
-					}
-					switch( $route['config']['type'] ) {
-						case self::type_controller:
-							list( $data['controller'],$data['action'] ) = explode( ':',$route['to'],2 );
-							$data['params'] = array();
-							if ( isset( $route['config']['params'] ) ) {   
-								$data['params'] = $route['config']['params'];
-							}
-						break;
-						case self::type_uri:
-							if ( strpos( $route['to'],'$' ) !== false && strpos( $route['path'],'(' ) !== false ) {
-								$route['to'] = preg_replace( "#^{$route['path']}$#",$route['to'],$route['path'] );
-							}
-							app::uri()->init( $route['to'] );
-						break;
-					}
-					break;
-				}
-			}
+	public static function instance() {
+		if ( is_null( self::$instance ) ) {
+			self::$instance = new self;
 		}
-		if ( !isset( $data['controller'] ) && !isset( $data['action'] ) ) {
-			$data = self::get_setup_data( uri::get_segments() );
-			if ( $data === false ) {
-				error::show(404);
-				return;
-			}
-		}
-		self::$data = $data;
+		return self::$instance;
 	}
 
-	public static function get_setup_data( $segments,$load_test=false ) {
-		if ( !is_array( $segments ) ) {
-			$segments = explode( '/',$segments );
+	public static function __callStatic( $method,$args ) {
+		$class = self::instance();
+		$method = "_{$method}";
+		if ( !method_exists( $class,$method ) ) {
+			throw new app_exception( "Method '%s' not found",$method );
 		}
-		$segments = array_values( $segments );
-		$retval = array(
-			'controller' => '',
-			'action'     => '',
-			'params'     => array()
-		);
-		$seg_count = count( $segments );
-		$subdirs = array();
-		if ( $seg_count === 0 ) {
-			$retval['controller'] = self::$config['default_controller'];
-			$retval['action'] = self::$config['default_action'];
-		}
-		else {
-			foreach( $segments as $seg ) {
-				if ( preg_match( '/^[a-zA-Z0-9_\-]+$/',$seg ) === 1 ) {
-					$subdirs[] = str_replace( '_','-',$seg );
-					continue;
+		return call_user_func_array( [ $class,$method ],$args );
+	}
+
+	public function request( request $request ) {
+		$this->request = $request;
+		return $this;
+	}
+
+	public function go() {
+		//handle the routing here and return the data it needs to handle this shit
+		switch( $this->request->mode() ) {
+			case request::mode_uri:
+				$uri = $this->request->resource_id()->all_segments();
+				if ( count( $this->routes ) > 0 ) {
+					$uri_string = ( count( $uri['segments'] ) > 0 ? implode( '/',$uri['segments'] ) : '/' );
+					foreach( $this->routes as $route ) {
+						if ( !isset( $route['config']['type'] ) ) {
+							throw new app_exception('Route type is required');
+						}
+						$route['path'] = str_replace( array(':num',':any',':all'),array('[0-9]+','[^/]+','.*?'),$route['path'] );
+						if ( preg_match( "#^{$route['path']}$#",$uri_string,$match ) !== 1 ) {
+							continue;
+						}
+						switch( $route['config']['type'] ) {
+							case self::type_rewrite:
+								if ( $route['path_new'] instanceof \Closure ) {
+									$route['path_new'] = call_user_func( $route['path_new'],$uri_string,$match );
+								}
+								if ( strpos( $route['path_new'],'$' ) !== false && strpos( $route['path'],'(' ) !== false ) {
+									$route['path_new'] = preg_replace( "#^{$route['path']}$#",$route['path_new'],$uri_string );
+								}
+								var_dump( $route );
+								exit;
+								$uri = new uri( $this->request->input(),[
+									'uri' => $route['path_new']
+								] );
+								$this->request->resource_id( $uri );
+								break 2;
+							case self::type_controller:
+								if ( $route['controller'] instanceof \Closure ) {
+									$route['controller'] = call_user_func( $route['controller'],$uri_string,$match );
+								}
+								list( $controller,$action ) = explode( ':',$route['controller'],2 );
+								$params = [];
+								if ( isset( $route['config']['params'] ) ) {
+									$params = $route['config']['params'];
+								}
+								return [
+									'type'       => request::type_controller,
+									'controller' => $controller,
+									'action'     => $action,
+									'params'     => $params
+								];
+								break;
+							case self::type_closure:
+								return [
+									'type'    => request::type_closure,
+									'closure' => $route['closure'],
+									'args'    => [
+										$uri_string,
+										$match
+									]
+								];
+								break;
+						}
+					}
 				}
+				$segments = array_values( $this->request->resource_id()->segments() );
+				$controller = $action = '';
+				$params = $subdirs = [];
+				$segment_count = count( $segments );
+				if ( $segment_count === 0 ) {
+					$controller = app::$config['controller']['default'];
+					$action     = app::$config['action']['default'];
+				}
+				else {
+					$subdirs = array_map( function( $value ) {
+						return str_replace( '_','-',$value );
+					},$segments );
+					$i = 0;
+					foreach( array_reverse( $subdirs,true ) as $i => $subdir ) {
+						unset( $subdirs[$i] );
+						if ( autoloader::class_by_type( ( count( $subdirs ) > 0 ? implode( '/',$subdirs ) . '/' : '' ) . str_replace( '-','_',$subdir ),\ionmvc\CLASS_TYPE_CONTROLLER ) === false ) {
+							continue;
+						}
+						break;
+					}
+					$controller = ( count( $subdirs ) > 0 ? implode( '/',$subdirs ) . '/' : '' ) . str_replace( '-','_',$segments[$i++] );
+					$action     = ( isset( $segments[$i] ) ? str_replace( '-','_',$segments[$i] ) : app::$config['action']['default'] );
+					if ( $segment_count > $i ) {
+						$params = array_slice( $segments,++$i );
+					}
+				}
+				return [
+					'type'       => request::type_controller,
+					'controller' => $controller,
+					'action'     => $action,
+					'params'     => $params
+				];
 				break;
-			}
-			$i = 0;
-			$rsubdirs = array_reverse( $subdirs,true );
-			foreach( $rsubdirs as $i => $subdir ) {
-				unset( $subdirs[$i] );
-				$subdir = str_replace( '-','_',$subdir );
-				$class_name = autoloader::class_by_type( ( count( $subdirs ) > 0 ? implode( '/',$subdirs ) . '/' : '' ) . $subdir,\ionmvc\CLASS_TYPE_CONTROLLER );
-				if ( $class_name === false ) {
-					continue;
+			case request::mode_cli:
+				$retval = [
+					'type'    => request::type_command,
+					'command' => false
+				];
+				if ( ( $command = $this->request->resource_id()->arg(0,false) ) === false ) {
+					return $retval;
 				}
+				$parts = array_map( function( $value ) {
+					return str_replace( '-','_',$value );
+				},explode( ':',$command ) );
+				$method = 'main';
+				while( count( $parts ) > 0 ) {
+					$class = implode( '/',$parts );
+					if ( autoloader::class_by_type( $class,\ionmvc\CLASS_TYPE_COMMAND ) !== false ) {
+						$retval['command'] = $class;
+						$retval['method']  = $method;
+						return $retval;
+					}
+					$method = array_pop( $parts );
+				}
+				return $retval;
 				break;
-			}
-			$retval['controller'] = $segments[$i];
-			$i++;
-			$retval['action'] = ( isset( $segments[$i] ) ? $segments[$i] : self::$config['default_action'] );
-			if ( $seg_count > $i ) {
-				$retval['params'] = array_slice( $segments,++$i );
-			}
 		}
-		$retval['controller'] = str_replace( '-','_',( count( $subdirs ) > 0 ? implode( '/',$subdirs ) . '/' : '' ) . $retval['controller'] );
-		$retval['action'] = str_replace( '-','_',$retval['action'] );
-		if ( in_array( $retval['controller'],config::get('framework.controller.reserved') ) || in_array( $retval['action'],config::get('framework.action.reserved') ) ) {
-			return false;
-		}
-		if ( $load_test === true ) {
-			try {
-				app::load_controller( $retval['controller'],$retval['action'],$retval['params'],true );
-			}
-			catch ( load_exception $e ) {
-				return false;
-			}
-			catch ( app_exception $e ) {
-				throw $e;
-			}
-		}
-		return $retval;
 	}
 
-	public static function route_data() {
-		return self::$data;
-	}
-
-	public static function add( $path,$to,$config=array() ) {
-		if ( !isset( $config['method'] ) ) {
-			$config['method'] = self::method_get;
+	protected function add( $info ) {
+		if ( !isset( $info['config']['method'] ) ) {
+			$info['config']['method'] = request::method_get;
 		}
-		self::$routes[] = compact('path','to','config');
+		$this->routes[] = $info;
 	}
 
-	public static function controller( $path,$to,$config=array() ) {
+	public function _rewrite( $path,$path_new,$config=[] ) {
+		$config['type'] = self::type_rewrite;
+		$this->add( compact('path','path_new','config') );
+	}
+
+	public function _to_controller( $path,$controller,$config=[] ) {
 		$config['type'] = self::type_controller;
-		self::add( $path,$to,$config );
+		$this->add( compact('path','controller','config') );
 	}
 
-	public static function uri( $path,$to,$config=array() ) {
-		$config['type'] = self::type_uri;
-		self::add( $path,$to,$config );
+	public function _to_closure( $path,\Closure $closure,$config=[] ) {
+		$config['type'] = self::type_closure;
+		$this->add( compact('path','closure','config') );
 	}
 
 }

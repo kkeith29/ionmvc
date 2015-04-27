@@ -19,6 +19,9 @@ class time {
 
 	public static function init() {
 		date_default_timezone_set('UTC');
+		if ( isset( app::$config['timezone'] ) ) {
+			self::timezone( app::$config['timezone'] );
+		}
 	}
 
 	public static function now() {
@@ -72,19 +75,20 @@ class time {
 
 	public static function convert_date( $from,$to,$date ) {
 		$date_sep = substr( preg_replace( '#[0-9]+#','',$date ),0,1 );
-		$from_sep = substr( str_replace( array('MM','DD','YYYY','YY'),'',$from ),0,1 );
-		$to_sep = substr( str_replace( array('MM','DD','YYYY','YY'),'',$to ),0,1 );
+		$parts = ['MM','DD','YYYY','YY'];
+		$from_sep = substr( str_replace( $parts,'',$from ),0,1 );
+		$to_sep = substr( str_replace( $parts,'',$to ),0,1 );
 		$date = explode( $date_sep,$date );
 		$from = explode( $from_sep,$from );
 		$to = explode( $to_sep,$to );
-		$keys = array();
+		$keys = [];
 		foreach( $from as $i => $part ) {
 			if ( ( $key = array_search( $part,$to ) ) === false ) {
 				throw new app_exception('Incompatible formats');
 			}
 			$keys[$key] = $i;
 		}
-		$data = array();
+		$data = [];
 		foreach( $to as $i => $part ) {
 			if ( isset( $keys[$i] ) ) {
 				$data[] = $date[$keys[$i]];
@@ -94,8 +98,8 @@ class time {
 	}
 
 	public static function readable( $data,$date=false,$allow_past=true,$allow_future=true ) {
-		$periods = array('second','minute','hour','day','week','month','year','decade');
-		$lengths = array('60','60','24','7','4.35','12','10');
+		$periods = ['second','minute','hour','day','week','month','year','decade'];
+		$lengths = ['60','60','24','7','4.35','12','10'];
 		$now = time();
 		$unix_date = ( $date == true ? strtotime( $data ) : $data );
 		if ( empty( $unix_date ) ) {   
@@ -119,18 +123,18 @@ class time {
 		return "{$difference} {$periods[$j]}{$tense}";
 	}
 
-	public static function readable_seconds( $seconds,$use=null,$labels=array(),$show_zero=false ) {
+	public static function readable_seconds( $seconds,$use=null,$labels=[],$show_zero=false ) {
 		if ( !is_null( $use ) ) {
 			$use = explode( ',',$use );
 		}
-		$times = array(
+		$times = [
 			'y' => ( 60 * 60 * 24 * 365 ),
 			'd' => ( 60 * 60 * 24 ),
 			'h' => ( 60 * 60 ),
 			'm' => 60,
 			's' => 1
-		);
-		$retval = array();
+		];
+		$retval = [];
 		$zero = !$show_zero;
 		foreach( $times as $label => $secs ) {
 			if ( !is_null( $use ) && !in_array( $label,$use ) ) {

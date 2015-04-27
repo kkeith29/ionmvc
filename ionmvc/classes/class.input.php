@@ -9,31 +9,41 @@ class input {
 
 	private static $useragent = null;
 
-	private $request = array();
-	private $files = array();
-	private $all = array();
+	private $data = [];
+	private $all  = [];
 
 	public static function __callStatic( $method,$args ) {
-		$class = app::input();
+		$class = request::input();
 		$method = "_{$method}";
 		if ( !method_exists( $class,$method ) ) {
 			throw new app_exception( "Method '%s' not found",$method );
 		}
-		return call_user_func_array( array( $class,$method ),$args );
+		return call_user_func_array( [ $class,$method ],$args );
 	}
 
-	public function __construct() {
-		$this->request = array_func::merge( $_GET,$_POST );
-		$this->files = array_func::expand_key( $this->parse_files() );
-		$this->all = array_func::merge( $this->request,$this->files );
+	public function __construct( $data=array() ) {
+		foreach( ['get','post','cookie','files','server'] as $key ) { //think of how to integrate headers
+			$this->data[$key] = ( isset( $data[$key] ) ? $data[$key] : [] );
+		}
+		$this->data['request'] = array_func::merge( $this->data['get'],$this->data['post'] );
+		$this->data['files']   = array_func::expand_key( $this->parse_files() );
+		$this->all = array_func::merge( $this->data['request'],$this->data['files'] );
+	}
+
+	public function __call( $method,$args ) {
+		$method = "_{$method}";
+		if ( !method_exists( $this,$method ) ) {
+			throw new app_exception( "Method '%s' not found",$method );
+		}
+		return call_user_func_array( [ $this,$method ],$args );
 	}
 
 	private function parse_files() {
-		$files = array();
-		if ( count( $_FILES ) === 0 ) {
+		$files = [];
+		if ( count( $this->data['files'] ) === 0 ) {
 			return $files;
 		}
-		foreach( $_FILES as $name => $data ) {
+		foreach( $this->data['files'] as $name => $data ) {
 			foreach( $data as $type => $value ) {
 				if ( is_array( $value ) ) {
 					$value = array_func::flatten_key( $value,$name );
@@ -49,15 +59,23 @@ class input {
 	}
 
 	public function _get( $key=null,$retval=false ) {
-		return array_func::get( $_GET,$key,$retval );
+		return array_func::get( $this->data['get'],$key,$retval );
 	}
 
 	public function _post( $key=null,$retval=false ) {
-		return array_func::get( $_POST,$key,$retval );
+		return array_func::get( $this->data['post'],$key,$retval );
 	}
 
 	public function _request( $key=null,$retval=false ) {
-		return array_func::get( $this->request,$key,$retval );
+		return array_func::get( $this->data['request'],$key,$retval );
+	}
+
+	public function _cookie( $key=null,$retval=false ) {
+		return array_func::get( $this->data['cookie'],$key,$retval );
+	}
+
+	public function _server( $key=null,$retval=false ) {
+		return array_func::get( $this->data['server'],$key,$retval );
 	}
 
 	public function _all() {
@@ -65,7 +83,7 @@ class input {
 	}
 
 	public function _file( $key=null,$retval=false ) {
-		return array_func::get( $this->files,$key,$retval );
+		return array_func::get( $this->data['files'],$key,$retval );
 	}
 
 	public function _has( $key ) {
@@ -97,10 +115,10 @@ class input {
 		if ( !move_uploaded_file( $file['tmp_name'],$path ) ) {
 			return false;
 		}
-		return array(
+		return [
 			'file' => $name,
 			'path' => $path
-		);
+		];
 	}
 
 	public static function useragent() {

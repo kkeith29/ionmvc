@@ -9,7 +9,6 @@ abstract class array_func {
 	const trim_left  = 1;
 	const trim_right = 2;
 
-	//simplifed version of isgr get (based on laravel array_get())
 	public static function get( $array,$key,$retval=false,$sep='.' ) {
 		if ( is_null( $key ) ) {
 			return $array;
@@ -26,7 +25,6 @@ abstract class array_func {
 		return $array;
 	}
 
-	//simplifed version of isgr set (based on laravel array_set()), loved the way it was done there so I decided to use the same methodology
 	public static function set( &$array,$key,$value,$sep='.' ) {
 		if ( isset( $array[$key] ) ) {
 			$array[$key] = $value;
@@ -36,7 +34,7 @@ abstract class array_func {
 		while( count( $keys ) > 1 ) {
 			$key = array_shift( $keys );
 			if ( !isset( $array[$key] ) || !is_array( $array[$key] ) ) {
-				$array[$key] = array();
+				$array[$key] = [];
 			}
 			$array =& $array[$key];
 		}
@@ -64,7 +62,7 @@ abstract class array_func {
 		if ( !is_array( $array ) ) {
 			return false;
 		}
-		$narray = array();
+		$narray = [];
 		foreach( $array as $key => $value ) {
 			$narray[$key] = ( is_array( $value ) ? self::map_recursive( $func,$value ) : ( is_array( $func ) ? call_user_func_array( $func,$value ) : $func( $value ) ) );
 		}
@@ -72,7 +70,7 @@ abstract class array_func {
 	}
 
 	public static function flatten( $array ) {
-		$parts = array();
+		$parts = [];
 		foreach( $array as $key => $val ) {
 			if ( is_array( $val ) ) {
 				$parts = array_merge( $parts,self::flatten( $val ) );
@@ -84,8 +82,8 @@ abstract class array_func {
 		return $parts;
 	}
 
-	public static function flatten_key( $array,$prepend='',$sep='/' ) {
-		$retval = array();
+	public static function flatten_key( $array,$prepend='',$sep='.' ) {
+		$retval = [];
 		foreach( $array as $key => $value ) {
 			if ( is_array( $value ) ) {
 				$retval = array_merge( $retval,self::flatten_key( $value,$prepend.$sep.$key,$sep ) );
@@ -96,8 +94,8 @@ abstract class array_func {
 		return $retval;
 	}
 
-	public static function expand_key( $array,$sep='/' ) {
-		$retval = array();
+	public static function expand_key( $array,$sep='.' ) {
+		$retval = [];
 		foreach( $array as $key => $value ) {
 			self::set( $retval,$key,$value,$sep );
 		}
@@ -105,7 +103,7 @@ abstract class array_func {
 	}
 
 	public static function assoc( $array ) {
-		$retval = array();
+		$retval = [];
 		$chunks = array_chunk( $array,2 );
 		foreach( $chunks as $chunk ) {
 			if ( count( $chunk ) == 2 ) {
@@ -127,11 +125,11 @@ abstract class array_func {
 		$arrays = func_get_args();
 		$base = array_shift( $arrays );
 		if ( !is_array( $base ) ) {
-			$base = ( empty( $base ) ? array() : array( $base ) );
+			$base = ( empty( $base ) ? [] : [ $base ] );
 		}
 		foreach( $arrays as $array ) {
 			if ( !is_array( $array ) ) {
-				$array = array( $array );
+				$array = [ $array ];
 			}
 			foreach( $array as $key => $value ) {
 				if ( !array_key_exists( $key,$base ) && !is_numeric( $key ) ) {
@@ -139,7 +137,7 @@ abstract class array_func {
 					continue;
 				}
 				if ( is_array( $value ) || ( isset( $base[$key] ) && is_array( $base[$key] ) ) ) {
-					$base[$key] = self::merge_recursive_distinct( ( isset( $base[$key] ) ? $base[$key] : array() ),$array[$key] );
+					$base[$key] = self::merge_recursive_distinct( ( isset( $base[$key] ) ? $base[$key] : [] ),$array[$key] );
 				}
 				elseif ( is_numeric( $key ) ) {
 					if ( !in_array( $value,$base ) ) {
@@ -155,7 +153,7 @@ abstract class array_func {
 	}
 
 	public static function implode( $array,$sep='' ) {
-		$retval = array();
+		$retval = [];
 		foreach( $array as $key => $value ) {
 			$retval[] = "{$key}{$sep}{$value}";
 		}
@@ -163,12 +161,12 @@ abstract class array_func {
 	}
 
 	public static function diff_both( $array_1,$array_2 ) {
-		return array( array_diff( $array_1,$array_2 ),array_diff( $array_2,$array_1 ) );
+		return [ array_diff( $array_1,$array_2 ),array_diff( $array_2,$array_1 ) ];
 	}
 
 	public static function to_xml( $array,$level=0,$new_key=null ) {
 		$xml = '';
-		$_attrs = array();
+		$_attrs = [];
 		if ( isset( $array['_attrs'] ) && !is_null( $new_key ) ) {
 			$_attrs = $array['_attrs'];
 			unset( $array['_attrs'] );
@@ -183,7 +181,7 @@ abstract class array_func {
 				}
 			}
 			if ( $multi == false ) {
-				$attrs = array();
+				$attrs = [];
 				if ( !is_null( $new_key ) ) {
 					$key = $new_key;
 					$attrs = $_attrs;
@@ -227,7 +225,7 @@ abstract class array_func {
 		}
 		for( $i=0;$i < $divisor;$i++ ) {
 			if ( !isset( $data[$i] ) ) {
-				$data[$i] = array();
+				$data[$i] = [];
 			}
 		}
 		return $data;
@@ -236,7 +234,7 @@ abstract class array_func {
 	public static function shuffle_assoc( &$array ) {
 		$keys = array_keys( $array );
         shuffle( $keys );
-        $new = array();
+        $new = [];
 		foreach( $keys as $key ) {
 			$new[$key] = $array[$key];
 		}
@@ -254,6 +252,17 @@ abstract class array_func {
 		$array = array_reverse( $array,true );
 		$array[$key] = $value;
 		return array_reverse( $array,true );
+	}
+
+	public static function filter( $array,\Closure $func ) {
+		$retval = [];
+		foreach( $array as $key => $value ) {
+			if ( !call_user_func( $func,$key,$value ) ) {
+				continue;
+			}
+			$retval[$key] = $value;
+		}
+		return $retval;
 	}
 
 }

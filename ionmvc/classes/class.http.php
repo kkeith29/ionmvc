@@ -6,7 +6,7 @@ use ionmvc\exceptions\app as app_exception;
 
 class http {
 
-	private $statuses = array(
+	private $statuses = [
 		200	=> 'OK',
 		201	=> 'Created',
 		202	=> 'Accepted',
@@ -45,27 +45,27 @@ class http {
 		503	=> 'Service Unavailable',
 		504	=> 'Gateway Timeout',
 		505	=> 'HTTP Version Not Supported'
-	);
+	];
 	private $mime_types = null;
-	private $headers = array();
-	private $content_type = array(
+	private $headers = [];
+	private $content_type = [
 		'data'    => 'text/html',
 		'charset' => 'UTF-8',
 		'sent'    => false
-	);
+	];
 
 	public static function __callStatic( $method,$args ) {
-		$class = app::http();
+		$class = response::http();
 		$method = "_{$method}";
 		if ( !method_exists( $class,$method ) ) {
 			throw new app_exception( "Method '%s' not found",$method );
 		}
-		return call_user_func_array( array( $class,$method ),$args );
+		return call_user_func_array( [ $class,$method ],$args );
 	}
 
 	public function __construct() {
-		app::register('http',function() {
-			app::http()->send_headers();
+		response::hook()->attach('http',function() {
+			response::http()->send_headers();
 		});
 	}
 
@@ -89,9 +89,9 @@ class http {
 
 	public function _mime_type( $extn ) {
 		if ( is_null( $this->mime_types ) ) {
-			config::load('mime_types.php',array(
+			config::load('mime_types.php',[
 				'extend' => true
-			));
+			]);
 			$this->mime_types = config::get('mime_types');
 		}
 		if ( !isset( $this->mime_types[$extn] ) ) {
@@ -108,11 +108,11 @@ class http {
 		if ( strpos( $data,'/' ) === false && ( $data = $this->_mime_type( $data ) ) === false ) {
 			throw new app_exception('Mime type not found');
 		}
-		$this->content_type = array(
+		$this->content_type = [
 			'data'    => $data,
 			'charset' => $charset,
 			'sent'    => false
-		);
+		];
 	}
 
 	public function _status_code( $code,$text=null ) {
@@ -124,16 +124,36 @@ class http {
 			$this->_header( "Status: {$code} {$text}",true );
 			return;
 		}
-		$server_protocol = ( isset( $_SERVER['SERVER_PROTOCOL'] ) ? $_SERVER['SERVER_PROTOCOL'] : 'HTTP/1.1' );
+		$server_protocol = input::server('SERVER_PROTOCOL','HTTP/1.1');
 		$this->_header( "{$server_protocol} {$code} {$text}",true,$code );
 	}
 
 	public function _cache( $last_modified,$expiration ) {
 		//maybe do 304 here
 		$this->_header('Pragma: public');
-		$this->_header('Cache-Control: max-age=' . ( $expiration - $_SERVER['REQUEST_TIME'] ) . ', public');
+		$this->_header('Cache-Control: max-age=' . ( $expiration - input::server('REQUEST_TIME',0) ) . ', public');
 		$this->_header('Expires: ' . gmdate( 'D, d M Y H:i:s',$expiration ) . ' GMT');
 		$this->_header('Last-modified: ' . gmdate( 'D, d M Y H:i:s',$last_modified ) . ' GMT');
+	}
+
+	public static function parse_query_string( $data ) {
+		$data = explode( '&',$data );
+		$_data = [];
+		foreach( $data as $datum ) {
+			$key   = $datum;
+			$value = '';
+			if ( strpos( $key,'=' ) !== false ) {
+				list( $key,$value ) = explode( '=',$key,2 );
+				$key   = urldecode( $key );
+				$value = urldecode( $value );
+			}
+			$_data[$key] = $value;
+		}
+		return $_data;
+	}
+
+	public static function build_query_string( array $data ) {
+		return http_build_query( $data );
 	}
 
 }

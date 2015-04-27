@@ -9,59 +9,49 @@ class uri {
 
 	const csm_uri = 'csm';
 
-	const title_dash = '-';
+	const title_dash      = '-';
 	const title_underline = '_';
 
-	private static $routes = array();
+	private static $base64_chars = [
+		'original'     => ['+','/','='],
+		'replacements' => ['-','_','~']
+	];
 
-	private $config = array(
-		'url_nonsecure' => '',
-		'url_secure'    => '',
-		'url_extension' => false,
-		'append_index'  => true,
-		'ssl' => false
-	);
-	private $segments = array();
-	private $named_segments = array();
+	private $config = [
+		'permitted_chars' => false,
+		'url_nonsecure'   => '',
+		'url_secure'      => '',
+		'url_extension'   => false,
+		'append_index'    => true,
+		'ssl'             => false
+	];
+	private $uri = '';
+	private $input;
+	private $segments       = [];
+	private $named_segments = [];
+	private $frag           = '';
+	private $extension      = '';
 
-	public static function get_path( $parse=false ) {
-		$path = '';
-		if ( !isset( $_GET['_uri_'] ) ) {
-			if ( isset( $_SERVER['PATH_INFO'] ) ) {
-				$path = $_SERVER['PATH_INFO'];
-			}
-			else {
-				//setup request_uri or query_string method of getting url
-			}
-		}
-		else {
-			$path = $_GET['_uri_'];
-		}
-		$path = trim( $path,'/' );
-		return ( $parse == true ? self::parse_path( $path,true ) : $path );
-	}
-
-	public static function parse_path( $path,$init=false ) {
-		$retval = array(
-			'segments' => array(),
-			'named_segments' => array()
-		);
+	public static function path_parse( $path,$config=[] ) {
+		$retval = [
+			'segments'       => [],
+			'named_segments' => []
+		];
 		if ( is_string( $path ) && $path !== '' ) {
 			$parts = explode( '/',trim( $path,'/' ) );
 			$c = count( $parts );
 			$i = $n = 0;
-			$regex = config::get('url.permitted_chars');
 			foreach( $parts as $part ) {
 				if ( ++$i === $c ) {
-					foreach( array('#'=>'frag','.'=>'extn') as $str => $name ) {
+					foreach( ['#'=>'frag','.'=>'extn'] as $str => $name ) {
 						if ( ( $pos = strrpos( $part,$str ) ) !== false ) {
 							$retval[$name] = substr( $part,( $pos + 1 ) );
 							$part = substr( $part,0,$pos );
 						}
 					}
 				}
-				if ( $init === true && !preg_match( "#^[{$regex}]+$#",$part ) ) {
-					event::trigger('app.error.invalid_uri_chars');
+				if ( isset( $config['permitted_chars'] ) && $config['permitted_chars'] !== false && !preg_match( "#^[{$config['permitted_chars']}]+$#",$part ) ) {
+					//event::trigger('app.error.invalid_uri_chars');
 					break;
 				}
 				if ( strpos( $part,':' ) !== false ) {
@@ -82,60 +72,96 @@ class uri {
 		return $retval;
 	}
 
-	public static function __callStatic( $method,$args ) {
-		$class = app::uri();
-		$method = "_{$method}";
-		if ( !method_exists( $class,$method ) ) {
-			throw new app_exception( "Method '%s' not found",$method );
+	public function __construct( input $input,$config=[] ) {
+		$this->config = array_merge( $this->config,$config );
+		$this->input  = $input;
+		$this->uri    = ( !isset( $config['uri'] ) ? $this->path_get() : $config['uri'] );
+		$info = self::path_parse( $this->uri,[
+			'permitted_chars' => $this->config['permitted_chars']
+		] );
+		$this->segments = $info['segments'];
+		$this->named_segments = $info['named_segments'];
+		if ( isset( $info['frag'] ) ) {
+			$this->fragment = $info['frag'];
 		}
-		return call_user_func_array( array( $class,$method ),$args );
-	}
-
-	public function __construct() {
-		$base = trim(( isset( $_SERVER['HTTP_HOST'] ) ? "{$_SERVER['HTTP_HOST']}" . str_replace( basename( $_SERVER['SCRIPT_NAME'] ),'',$_SERVER['SCRIPT_NAME'] ) : 'localhost' ),'/');
-		$this->config['url_nonsecure'] = config::get('url.nonsecure','');
+		if ( isset( $info['extn'] ) ) {
+			$this->extension = $info['extn'];
+		}
+		$host = $this->host_get();
 		if ( $this->config['url_nonsecure'] === '' ) {
-			$this->config['url_nonsecure'] = "http://{$base}/"; 
+			$this->config['url_nonsecure'] = "http://{$host}/"; 
 		}
 		else {
 			$this->config['url_nonsecure'] = rtrim( $this->config['url_nonsecure'],'/' ) . '/';
 		}
-		$this->config['url_secure'] = config::get('url.secure','');
 		if ( $this->config['url_secure'] === '' ) {
-			$this->config['url_secure'] = "https://{$base}/";
+			$this->config['url_secure'] = "https://{$host}/";
 		}
 		else {
 			$this->config['url_secure'] = rtrim( $this->config['url_secure'],'/' ) . '/';
 		}
-		if ( config::get('url.append_index') === false ) {
-			$this->config['append_index'] = false;
-		}
-		if ( ( $extn = config::get('url.extension') ) !== false ) {
-			$this->config['url_extension'] = $extn;
-		}
-		$this->config['ssl'] = ( config::get('framework.ssl') === true );
-		$this->init( self::get_path() );
 	}
 
-	public function init( $path ) {
-		$data = self::parse_path( $path );
-		if ( count( $data['segments'] ) > 0 ) {
-			$data['segments'] = array_func::reindex( $data['segments'] );
+	public function __call( $method,$args ) {
+		$method = "_{$method}";
+		if ( !method_exists( $this,$method ) ) {
+			throw new app_exception( "Method '%s' not found",$method );
 		}
-		$this->segments = $data['segments'];
-		$this->named_segments = $data['named_segments'];
+		return call_user_func_array( [ $this,$method ],$args );
+	}
+
+	private function path_get() {
+		if ( $this->input->has('_uri_') ) {
+			return $this->input->request('_uri_');
+		}
+		if ( ( $path = $this->input->server('PATH_INFO') ) !== false ) {
+			return $path;
+		}
+		if ( ( $path = $this->input->server('REQUEST_URI') ) !== false ) {
+			return ltrim( $path,'/' );
+		}
+		//add request_uri and query string options here
+		throw new app_exception('Unable to determine uri path');
+	}
+
+	private function host_get() {
+		if ( ( $host = $this->input->server('HTTP_HOST') ) !== false ) {
+			$script_name = $this->input->server('SCRIPT_NAME');
+			return trim( $host . str_replace( basename( $script_name ),'',$script_name ),'/' );
+		}
+		return 'localhost';
+	}
+
+	public static function __callStatic( $method,$args ) {
+		$class = request::resource_id();
+		$_class = __CLASS__;
+		if ( !is_a( $class,$_class ) ) {
+			throw new app_exception("Resource ID is not an instance of URI, therefore this class is not usable");
+		}
+		$method = "_{$method}";
+		if ( !method_exists( $class,$method ) ) {
+			throw new app_exception( "Method '%s' not found",$method );
+		}
+		return call_user_func_array( [ $class,$method ],$args );
 	}
 
 	public function _segment_count() {
 		return count( $this->segments );
 	}
 
-	public function _get_segments( $s=0,$e=null ) {
+	public function _segments( $s=0,$e=null ) {
 		return array_slice( $this->segments,$s,( is_null( $e ) ? count( $this->segments ) : ( $e - $s ) ) );
 	}
 
-	public function _get_named_segments() {
+	public function _named_segments() {
 		return $this->named_segments;
+	}
+
+	public function _all_segments() {
+		return [
+			'segments'       => $this->segments,
+			'named_segments' => $this->named_segments
+		];
 	}
 
 	public function _is_set( $idx ) {
@@ -151,6 +177,10 @@ class uri {
 	public function _get( $idx,$return=false ) {
 		$type = ( is_numeric( $idx ) ? 'segments' : 'named_segments' );
 		return ( isset( $this->{$type}[$idx] ) ? $this->{$type}[$idx] : $return );
+	}
+
+	public function _segment( $idx,$return=false ) {
+		return $this->_get( $idx,$return );
 	}
 
 	public function _base( $ssl=null ) {
@@ -184,15 +214,15 @@ class uri {
 
 	public function _create( $path='',$config='' ) {
 		$config = config_string::parse( $config );
-		$defaults = array(
+		$defaults = [
 			'all'     => false,
 			'ssl'     => null,
 			'base'    => true,
 			'csm'     => false,
 			'no-extn' => false,
 			'no-frag' => false
-		);
-		$info = self::parse_path( $path );
+		];
+		$info = self::path_parse( $path );
 		$config = array_merge( $defaults,$info,$config );
 		unset( $info,$defaults );
 		if ( ( is_string( $path ) && $path == '' ) || ( is_array( $path ) && count( $path ) == 0 ) ) {
@@ -218,24 +248,20 @@ class uri {
 		return $url;
 	}
 
-	public function _current( $config=array() ) {
+	public function _current( $config=[] ) {
 		$config['all'] = true;
 		return $this->_create( '',$config );
 	}
 
 	public function _validate_csm() {
-		if ( $this->_get('csm') == security::checksum( $this->_create( array('csm'=>''),'all|no-extn|no-frag' ) ) ) {
+		if ( $this->_get('csm') == security::checksum( $this->_create( ['csm'=>''],'all|no-extn|no-frag' ) ) ) {
 			return true;
 		}
 		return false;
 	}
 
-	public static function segment( $idx,$return=false ) {
-		return app::init('uri')->_get( $idx,$return );
-	}
-
 	public static function title( $str,$sep=self::title_dash,$lowercase=false ) {
-		$replacements = array(
+		$replacements = [
 			'&\#\d+?;'       => '',
 			'&\S+?;'         => '',
 			'\s+'            => $sep,
@@ -244,7 +270,7 @@ class uri {
 			"{$sep}$"        => $sep,
 			"^{$sep}"        => $sep,
 			'\.+$'           => ''
-		);
+		];
 		$str = strip_tags( $str );
 		foreach( $replacements as $key => $value ) {
 			$str = preg_replace( "#{$key}#i",$value,$str );
@@ -256,11 +282,11 @@ class uri {
 	}
 
 	public static function base64_encode( $data ) {
-		return str_replace( array('+','/','='),array('-','_','~'),base64_encode( $data ) );
+		return str_replace( self::$base64_chars['original'],self::$base64_chars['replacements'],base64_encode( $data ) );
 	}
 
 	public static function base64_decode( $data ) {
-		return base64_decode( str_replace( array('-','_','~'),array('+','/','='),$data ) );
+		return base64_decode( str_replace( self::$base64_chars['replacements'],self::$base64_chars['original'],$data ) );
 	}
 
 }

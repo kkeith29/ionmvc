@@ -6,7 +6,7 @@ class redirect {
 
 	private static function _do( $loc,$full=false ) {
 		$loc = ( $full !== true ? uri::create( $loc ) : $loc );
-		app::terminate();
+		app::stop();
 		if ( config::get('framework.redirect') === true ) {
 			header("Location: {$loc}");
 		}

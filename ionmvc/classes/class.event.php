@@ -9,7 +9,7 @@ class event {
 	const stop = 'ionmvc.event.stop';
 	const last = 'ionmvc.event.last';
 
-	private $events = array();
+	private $events = [];
 
 	public static function __callStatic( $method,$args ) {
 		$class = app::event();
@@ -17,14 +17,18 @@ class event {
 		if ( !method_exists( $class,$method ) ) {
 			throw new app_exception( "Method '%s' does not exist",$method );
 		}
-		return call_user_func_array( array( $class,$method ),$args );
+		return call_user_func_array( [ $class,$method ],$args );
 	}
 
-	public function init() {
-		config::load('events.php');
+	public function __call( $method,$args ) {
+		$method = "_{$method}";
+		if ( !method_exists( $this,$method ) ) {
+			throw new app_exception( "Method '%s' does not exist",$method );
+		}
+		return call_user_func_array( [ $this,$method ],$args );
 	}
 
-	public function _trigger( $name,$args=array() ) {
+	public function _trigger( $name,$args=[] ) {
 		if ( !isset( $this->events[$name] ) ) {
 			return false;
 		}
@@ -34,17 +38,20 @@ class event {
 				break;
 			}
 			if ( $retval === self::last ) {
-				app::destruct();
+				app::stop();
 				break;
 			}
 		}
 	}
 
-	public function _bind( $name,\Closure $function,$config=array() ) {
+	public function _bind( $name,\Closure $function,$config=[] ) {
+		if ( !isset( $this->events[$name] ) ) {
+			$this->events[$name] = [];
+		}
 		$this->events[$name][] = compact('function','config');
 	}
 
-	public function _has_event( $name ) {
+	public function _exists( $name ) {
 		return isset( $this->events[$name] );
 	}
 

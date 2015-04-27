@@ -1,0 +1,16 @@
+#!/usr/bin/env php
+<?php
+
+use ionmvc\classes\app;
+use ionmvc\exceptions\app as app_exception;
+
+include '../init.php';
+
+try {
+	app::initialize( $config );
+}
+catch( app_exception $e ) {
+	$e->handle();
+}
+
+?>

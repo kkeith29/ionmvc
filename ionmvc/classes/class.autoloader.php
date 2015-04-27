@@ -10,8 +10,8 @@ class autoloader {
 	const append    = 2;
 	const overwrite = 3;
 
-	private static $class_types = array();
-	private static $namespaces = array();
+	private static $class_types = [];
+	private static $namespaces = [];
 
 	public static function register() {
 		self::$class_types = config::get('framework.class_types');
@@ -20,6 +20,28 @@ class autoloader {
 			self::class_type_namespace( $config['type'],$namespace );
 		}
 		\spl_autoload_register( __CLASS__ . '::load' );
+	}
+
+	public static function class_id( $name ) {
+		$name = str_replace( '\\','.',ltrim( $name,'.' ) );
+		$namespace = false;
+		if ( ( $pos = strrpos( $name,'.' ) ) !== false ) {
+			$namespace = explode( '.',$name );
+		}
+		if ( $namespace === false ) {
+			return false;
+		}
+		$_path = [];
+		$i = 1;
+		while( ( $name = array_pop( $namespace ) ) !== null ) {
+			$_path[$i] = $name;
+			$_namespace = implode( '.',$namespace );
+			if ( isset( self::$namespaces[$_namespace] ) ) {
+				return implode( '/',array_reverse( $_path ) );
+			}
+			$i++;
+		}
+		return false;
 	}
 
 	public static function load( $name ) {
@@ -33,16 +55,16 @@ class autoloader {
 		}
 		$path = false;
 		if ( $namespace !== false ) {
-			$_path = array();
+			$_path = [];
 			$i = 1;
 			while( ( $name = array_pop( $namespace ) ) !== null ) {
 				$_path[$i] = ( $i !== 1 ? str_replace( '_','-',$name ) : $name );
 				$_namespace = implode( '.',$namespace );
 				if ( isset( self::$namespaces[$_namespace] ) ) {
 					$namespace = $_namespace;
-					$class_type = self::class_types(array(
+					$class_type = self::class_types([
 						'namespace' => $namespace
-					));
+					]);
 					if ( isset( $class_type['file_prefix'] ) ) {
 						$_path[1] = $class_type['file_prefix'] . '.' . $_path[1];
 					}
@@ -75,7 +97,7 @@ class autoloader {
 		self::$class_types[$type] = $config;
 	}
 
-	public static function class_types( $config=array() ) {
+	public static function class_types( $config=[] ) {
 		$class_types = self::$class_types;
 		if ( !isset( $config['type'] ) && !isset( $config['namespace'] ) ) {
 			return $class_types;
@@ -96,17 +118,17 @@ class autoloader {
 	}
 
 	public static function add_namespace( $namespace,$class_type,$path ) {
-		$namespace = str_replace( array('/','\\'),'.',$namespace );
-		self::$namespaces[$namespace] = array(
+		$namespace = str_replace( ['/','\\'],'.',$namespace );
+		self::$namespaces[$namespace] = [
 			'type' => $class_type,
 			'path' => $path
-		);
+		];
 		self::class_type_namespace( $class_type,$namespace,self::prepend );
 	}
 
 	public static function class_type_namespace( $class_type,$namespace,$action=self::append ) {
 		if ( !isset( self::$class_types[$class_type]['namespaces'] ) ) {
-			self::$class_types[$class_type]['namespaces'] = array();
+			self::$class_types[$class_type]['namespaces'] = [];
 		}
 		switch( $action ) {
 			case self::prepend:
@@ -116,19 +138,19 @@ class autoloader {
 				self::$class_types[$class_type]['namespaces'][] = $namespace;
 			break;
 			case self::overwrite:
-				self::$class_types[$class_type]['namespaces'] = array( $namespace );
+				self::$class_types[$class_type]['namespaces'] = [ $namespace ];
 			break;
 		}
 	}
 
-	public static function class_by_type( $class,$class_type,$config=array() ) {
-		$class_type = self::class_types(array(
+	public static function class_by_type( $class,$class_type,$config=[] ) {
+		$class_type = self::class_types([
 			'type' => $class_type
-		));
+		]);
 		if ( !isset( $class_type['namespaces'] ) ) {
 			return false;
 		}
-		$class = trim( str_replace( array('/'),'.',$class ),'.' );
+		$class = trim( str_replace( ['/'],'.',$class ),'.' );
 		$found = false;
 		foreach( $class_type['namespaces'] as $namespace ) {
 			$_class = "{$namespace}.{$class}";

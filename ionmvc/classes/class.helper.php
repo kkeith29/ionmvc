@@ -3,23 +3,24 @@
 namespace ionmvc\classes;
 
 use ionmvc\exceptions\app as app_exception;
+use ionmvc\traits\magic_vars;
 
 class helper {
 
-	protected $data = array();
+	use magic_vars;
 
 	final public static function instance( $name,$varname=null ) {
 		if ( is_null( $varname ) ) {
 			$varname = str_replace( array('/','__'),'_',$name );
 		}
-		if ( ( $instance = app::$registry->find( registry::helper,$varname ) ) === false ) {
+		if ( ( $instance = app::$registry->find( \ionmvc\CLASS_TYPE_HELPER,$varname ) ) === false ) {
 			$instance = autoloader::class_by_type( $name,\ionmvc\CLASS_TYPE_HELPER,array(
 				'instance' => true
 			) );
 			if ( $instance === false ) {
 				throw new app_exception( 'Unable to load helper: %s',$name );
 			}
-			app::$registry->add( registry::helper,$varname,$instance );
+			app::$registry->add( \ionmvc\CLASS_TYPE_HELPER,$varname,$instance );
 		}
 		return $instance;
 	}
@@ -34,24 +35,6 @@ class helper {
 
 	public static function __callStatic( $class,$args ) {
 		return self::instance( $class );
-	}
-
-	public function __construct() {}
-
-	public function __isset( $key ) {
-		return isset( $this->data[$key] );
-	}
-
-	public function __get( $key ) {
-		return ( array_key_exists( $key,$this->data ) ? $this->data[$key] : null );
-	}
-
-	public function __set( $key,$value ) {
-		$this->data[$key] = $value;
-	}
-
-	public function __unset( $key ) {
-		unset( $this->data[$key] );
 	}
 
 }
